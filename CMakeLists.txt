@@ -4,7 +4,7 @@ project(Simple_IPC_Protocol)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(SOURCE_FILES
-    README.md main.c)
+    README.md main.c functionalities.c functionalities.h constants.h)
 
 include_directories(.)
 
