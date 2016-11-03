@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <fcntl.h>
+#include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include "functionalities.h"
