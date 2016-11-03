@@ -9,6 +9,7 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+
 #include "functionalities.h"
 #include "constants.h"
 
@@ -69,7 +70,8 @@ void start_handling_commands() {
             /* handle the command here */
             //handle the login
             char *p = strtok(command, " \t\n");
-            if (!strcmp(p, LOGIN)) {
+            if (!strcmp(p, LOGIN))
+            {
                 if (is_logged_in == 1) {
                     sprintf(response, "Another user is already logged in");
                     goto out; //NEVER USE GOTO
@@ -91,7 +93,10 @@ void start_handling_commands() {
                     sprintf(response, "Login failed, username \"%s\" doesn't exist", name);
                 }
 
-            } else if (!strcmp(p, MY_STAT)) {
+            }
+            else if (!strcmp(p, MY_STAT))
+            {
+                response[0] = '\0';
                 if (is_logged_in == 0) {
                     sprintf(response, "You are required to login before executing commands");
                     goto out; //NEVER USE GOTO
@@ -112,16 +117,52 @@ void start_handling_commands() {
                 }
                 print_file_info(p,file_stats,response);
             }
-            else if (!strcmp(p, HELP)) {
+            else if (!strcmp(p, MY_FIND))
+            {
+                response[0] = '\0';
+                if (is_logged_in == 0) {
+                    sprintf(response, "You are required to login before executing commands");
+                    goto out; //NEVER USE GOTO
+                }
+                char *cwd = getcwd(NULL, 0); //pointer to current directory
+                char *d = strtok(NULL, " \t\n"); //pointer to dirname
+                char *f = strtok(NULL, " \t\n"); //pointer to filename
+                if (d == NULL)
+                {
+                    sprintf(response,"Command format: myfind [directory] <filename>");
+                    free(cwd);
+                    goto out;
+                }
+                if (f == NULL)
+                {
+                    //defaults directory to current working directory
+                    f = d;
+                    d = cwd;
+                }
+                if (!is_dir(d))
+                {
+                    sprintf(response,"Error at directory : %sm\n",strerror(errno));
+                    free(cwd);
+                    goto out;
+                }
+                // directory is fine, start looking for the file;
+                find_file(d,f,response);
+                if (response[0] == '\0')
+                    sprintf(response,"No file with that name found");
+            }
+            else if (!strcmp(p, HELP))
+            {
                 sprintf(response, "Write with lower-case letters!");
-            } else if (!strcmp(p, QUIT)) {
+            } else if (!strcmp(p, QUIT))
+            {
                 response_length = EXIT_STATUS;
                 write(socket_pair[0], &response_length, 4);
                 close(socket_pair[0]);
                 close(internal_pipe[0]);
                 close(internal_pipe[1]);
                 exit(0);
-            } else {
+            } else
+            {
                 sprintf(response, "Invalid command, try \"help\" for assistance");
             }
 

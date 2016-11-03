@@ -13,7 +13,7 @@
 #define HELP "help"
 #define QUIT "quit"
 #define COMM_LENGTH 500
-#define RESPONSE_LENGTH 1000
+#define RESPONSE_LENGTH 5000
 #define ARG_LENGTH 100
 #define FIFO_NAME "/projects/Simple_IPC_Protocol/.hidden_fifo"
 #define USERS_FILE "/projects/Simple_IPC_Protocol/.users"

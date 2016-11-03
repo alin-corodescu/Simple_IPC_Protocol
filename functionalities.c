@@ -4,6 +4,7 @@
 
 #include <time.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 #include "functionalities.h"
 
 
@@ -26,7 +27,6 @@ int check_for_user(const char* name)
 
 void print_file_info(const char *path, const struct stat file_stats, char *buffer) {
 
-    buffer[0] = '\0';
     char row[MAX_COL];
     sprintf(row,"Information about %s :\n",path);
     strcat(buffer,row);
@@ -57,4 +57,44 @@ char* generate_human_readable_perm(const struct stat file_stat,char *buff)
     strcat(buff, (file_stat.st_mode & S_IWOTH) ? "w" : "-");
     strcat(buff, (file_stat.st_mode & S_IXOTH) ? "x" : "-");
     strcat(buff, "\n");
+}
+
+int is_dir(const char* path)
+{
+    DIR* d;
+    d = opendir(path);
+    if (d == NULL)
+        return 0;
+    closedir(d);
+    return 1;
+}
+
+void find_file(const char* dir_path, const char* filename, char* buffer)
+{
+    struct DIR* dir;
+    dir = opendir(dir_path);
+    if (dir == NULL) return;
+    struct dirent *entry;
+    char new_path[PATH_MAX];
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (!strcmp(entry->d_name,".") || !strcmp(entry->d_name,".."))
+            continue;
+        sprintf(new_path,"%s/%s",dir_path,entry->d_name);
+        if (entry->d_type != DT_DIR)
+        {
+            if (!strcmp(entry->d_name,filename))
+            {
+                strcat(strcat(strcat(buffer,"Found the file at : "),new_path),"\n");
+                struct stat file_stats;
+                stat(new_path,&file_stats);
+                print_file_info(new_path,file_stats,buffer);
+                strcat(buffer,"\n");
+            }
+        }
+        else
+            find_file(new_path,filename,buffer);
+    }
+    closedir(dir);
+    return;
 }
