@@ -2,9 +2,7 @@
 // Created by alin on 11/1/16.
 //
 
-#include <time.h>
-#include <sys/stat.h>
-#include <stdlib.h>
+
 #include "functionalities.h"
 
 

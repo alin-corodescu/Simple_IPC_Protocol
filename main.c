@@ -1,20 +1,7 @@
 //
 // Created by alin on 10/30/16.
 //
-
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/fcntl.h>
-#include <sys/stat.h>
-#include <stdlib.h>
-#include <signal.h>
-
 #include "functionalities.h"
-#include "constants.h"
-
-
 void start_handling_commands();
 
 
@@ -36,21 +23,21 @@ void start_handling_commands() {
     if (status == -1)
     {
         printf("Error at internal pipe creation: %s",strerror(errno));
-        exit(1);
+        exit(ERR_FILE);
     }
     //create socket pair for message length communication
     status = socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair);
     if (status == -1)
     {
         printf("Error at socketpair creation: %s\n",strerror(errno));
-        exit(2);
+        exit(ERR_FILE);
     }
 
     pid = fork();
     if (pid == -1)
     {
         printf("Error at creating new child process %s\n",strerror(errno));
-        exit(3);
+        exit(ERR_PROC);
     }
     if (!pid) {
         //parent process
@@ -64,24 +51,24 @@ void start_handling_commands() {
             {
                 printf("[parent] Error at writing the command length %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(pid,9);
-                exit(4);
+                kill(pid,SIGKILL);
+                exit(ERR_COMM);
             }
             status = write(internal_pipe[1], command, command_length);
             if (status < command_length)
             {
                 printf("[parent] Error at writing the command in the internal pipe : %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(pid,9);
-                exit(4);
+                kill(pid,SIGKILL);
+                exit(ERR_COMM);
             }
 
             if (read(socket_pair[1], &response_length, 4) < 4)
             {
                 printf("[parent] Error at getting response length: %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(pid,9);
-                exit(4);
+                kill(pid,SIGKILL);
+                exit(ERR_COMM);
             }
 
             if (response_length == EXIT_STATUS) {
@@ -102,8 +89,8 @@ void start_handling_commands() {
             {
                 printf("[parent] Error at opening the FIFO : %s",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(pid,9);
-                exit(4);
+                kill(pid,SIGKILL);
+                exit(ERR_FILE);
             }
 
             if (read(pipe_fd, &response, response_length) < response_length)
@@ -111,8 +98,8 @@ void start_handling_commands() {
                 printf("[parent] Error at getting response string: %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
                 close(pipe_fd);
-                kill(pid,9);
-                exit(4);
+                kill(pid,SIGKILL);
+                exit(ERR_COMM);
             }
             printf("%s\n", response);
         }
@@ -140,8 +127,8 @@ void start_handling_commands() {
                     printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
                 }
                 if (should_kill)
-                    kill(getppid(),9);
-                exit(3);
+                    kill(getppid(),SIGKILL);
+                exit(ERR_COMM);
             }
             if (read(internal_pipe[0], command, command_length) < command_length)
             {
@@ -160,8 +147,8 @@ void start_handling_commands() {
                     printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
                 }
                 if (should_kill)
-                    kill(getppid(),9);
-                exit(3);
+                    kill(getppid(),SIGKILL);
+                exit(ERR_COMM);
             }
 
             char *p = strtok(command, " \t\n");
@@ -270,7 +257,7 @@ void start_handling_commands() {
                     printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
                 }
                 if (should_kill)
-                    kill(getppid(),9);
+                    kill(getppid(),SIGKILL);
                 exit(0);
             } else
             {
@@ -283,16 +270,16 @@ void start_handling_commands() {
             {
                 printf("[child] Error at writing the response length : %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(getppid(),9);
-                exit(4);
+                kill(getppid(),SIGKILL);
+                exit(ERR_COMM);
             }
 
             if (access(FIFO_NAME, F_OK) == -1 && mkfifo(FIFO_NAME, 0666) == -1)
             {
                 printf("[child] Error at creating FIFO in the filesystem: %s\n",strerror(errno));
                 close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
-                kill(getppid(),9);
-                exit(4);
+                kill(getppid(),SIGKILL);
+                exit(ERR_FILE);
             }
             pipe_fd = open(FIFO_NAME, O_WRONLY);
             if (pipe_fd == -1) {
@@ -302,7 +289,7 @@ void start_handling_commands() {
             if (write(pipe_fd, response, response_length) < response_length)
             {
                 printf("[child] Error at writing the response : %s",strerror(errno));
-                kill(getppid(),9);
+                kill(getppid(),SIGKILL);
             }
         }
     }
