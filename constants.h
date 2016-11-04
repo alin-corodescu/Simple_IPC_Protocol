@@ -16,8 +16,8 @@
 #define RESPONSE_LENGTH 5000
 #define ARG_LENGTH 100
 #define MAX_COL 100
-#define FIFO_NAME "/projects/Simple_IPC_Protocol/.hidden_fifo"
-#define USERS_FILE "/projects/Simple_IPC_Protocol/.users"
+#define FIFO_NAME ".hidden_fifo"
+#define USERS_FILE ".users"
 #define EXIT_STATUS -1
 #define ERR_COMM 2
 #define ERR_PROC 3
