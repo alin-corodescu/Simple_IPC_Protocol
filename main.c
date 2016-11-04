@@ -9,6 +9,7 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "functionalities.h"
 #include "constants.h"
@@ -23,6 +24,7 @@ int main() {
 }
 
 void start_handling_commands() {
+    int status;
     char command[COMM_LENGTH];
     char response[RESPONSE_LENGTH];
     int socket_pair[2], internal_pipe[2], pipe_fd;
@@ -30,12 +32,26 @@ void start_handling_commands() {
     int command_length, response_length;
 
     //create the internal pipe for commands passing
-    pipe(internal_pipe);
-
+    status  = pipe(internal_pipe);
+    if (status == -1)
+    {
+        printf("Error at internal pipe creation: %s",strerror(errno));
+        exit(1);
+    }
     //create socket pair for message length communication
-    socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair);
+    status = socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair);
+    if (status == -1)
+    {
+        printf("Error at socketpair creation: %s\n",strerror(errno));
+        exit(2);
+    }
 
     pid = fork();
+    if (pid == -1)
+    {
+        printf("Error at creating new child process %s\n",strerror(errno));
+        exit(3);
+    }
     if (!pid) {
         //parent process
         while (1) {
@@ -43,38 +59,123 @@ void start_handling_commands() {
             fgets(command, COMM_LENGTH, stdin);
             command_length = strlen(command) + 1;
 
-            write(socket_pair[1], &command_length, 4);
-            write(internal_pipe[1], command, command_length);
+            status = write(socket_pair[1], &command_length, 4);
+            if (status < 4)
+            {
+                printf("[parent] Error at writing the command length %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(pid,9);
+                exit(4);
+            }
+            status = write(internal_pipe[1], command, command_length);
+            if (status < command_length)
+            {
+                printf("[parent] Error at writing the command in the internal pipe : %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(pid,9);
+                exit(4);
+            }
 
-            read(socket_pair[1], &response_length, 4);
+            if (read(socket_pair[1], &response_length, 4) < 4)
+            {
+                printf("[parent] Error at getting response length: %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(pid,9);
+                exit(4);
+            }
 
-            if (response_length == EXIT_STATUS)
+            if (response_length == EXIT_STATUS) {
+                //normal exiting procedure, son already exited
+                close(socket_pair[0]);
+                close(socket_pair[1]);
+                close(internal_pipe[0]);
+                close(internal_pipe[1]);
                 break;
+            }
 
             //wait for the actual file to be created
             while (access(FIFO_NAME, F_OK) == -1);
+
             pipe_fd = open(FIFO_NAME, O_RDONLY);
 
-            read(pipe_fd, &response, response_length);
+            if (pipe_fd == -1)
+            {
+                printf("[parent] Error at opening the FIFO : %s",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(pid,9);
+                exit(4);
+            }
 
+            if (read(pipe_fd, &response, response_length) < response_length)
+            {
+                printf("[parent] Error at getting response string: %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                close(pipe_fd);
+                kill(pid,9);
+                exit(4);
+            }
             printf("%s\n", response);
         }
     } else {
         //child process
         close(0);
         int is_logged_in = 0;
-        while (1) {
-            read(socket_pair[0], &command_length, 4);
-            read(internal_pipe[0], command, command_length);
 
-            /* handle the command here */
-            //handle the login
+        while (1) {
+            if (read(socket_pair[0], &command_length, 4) < 4)
+            {
+                printf("[child] Error when reading command length %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                int should_kill = 0;
+                response_length = EXIT_STATUS;
+                if (write(socket_pair[0], &response_length, 4) < 4) {
+                    printf("[child] Error at writing response length : %s\n",strerror(errno));
+                    should_kill = 1;
+                }
+                close(socket_pair[0]);
+                close(socket_pair[1]);
+                close(internal_pipe[0]);
+                close(internal_pipe[1]);
+                if (access(FIFO_NAME, F_OK) != -1 && remove(FIFO_NAME) == -1) {
+                    printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
+                }
+                if (should_kill)
+                    kill(getppid(),9);
+                exit(3);
+            }
+            if (read(internal_pipe[0], command, command_length) < command_length)
+            {
+                printf("[child] Error when reading the command data %s\n",strerror(errno));
+                int should_kill = 0;
+                response_length = EXIT_STATUS;
+                if (write(socket_pair[0], &response_length, 4) < 4) {
+                    printf("[child] Error at writing response length : %s\n",strerror(errno));
+                    should_kill = 1;
+                }
+                close(socket_pair[0]);
+                close(socket_pair[1]);
+                close(internal_pipe[0]);
+                close(internal_pipe[1]);
+                if (access(FIFO_NAME, F_OK) != -1 && remove(FIFO_NAME) == -1) {
+                    printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
+                }
+                if (should_kill)
+                    kill(getppid(),9);
+                exit(3);
+            }
+
             char *p = strtok(command, " \t\n");
+            if ( p == NULL)
+            {
+                sprintf(response, "Invalid command, try \"help\" for assistance");
+                goto out;
+            }
             if (!strcmp(p, LOGIN))
             {
+                response[0] = '\0';
                 if (is_logged_in == 1) {
                     sprintf(response, "Another user is already logged in");
-                    goto out; //NEVER USE GOTO
+                    goto out; //discouraged
                 }
                 p = strtok(NULL, " \t\n");
                 if (p == NULL)
@@ -99,7 +200,7 @@ void start_handling_commands() {
                 response[0] = '\0';
                 if (is_logged_in == 0) {
                     sprintf(response, "You are required to login before executing commands");
-                    goto out; //NEVER USE GOTO
+                    goto out;
                 }
                 p = strtok(NULL, " \t\n");
                 if (p == NULL)
@@ -122,7 +223,7 @@ void start_handling_commands() {
                 response[0] = '\0';
                 if (is_logged_in == 0) {
                     sprintf(response, "You are required to login before executing commands");
-                    goto out; //NEVER USE GOTO
+                    goto out;
                 }
                 char *cwd = getcwd(NULL, 0); //pointer to current directory
                 char *d = strtok(NULL, " \t\n"); //pointer to dirname
@@ -141,7 +242,7 @@ void start_handling_commands() {
                 }
                 if (!is_dir(d))
                 {
-                    sprintf(response,"Error at directory : %sm\n",strerror(errno));
+                    sprintf(response,"Error at directory : %s\n",strerror(errno));
                     free(cwd);
                     goto out;
                 }
@@ -149,17 +250,27 @@ void start_handling_commands() {
                 find_file(d,f,response);
                 if (response[0] == '\0')
                     sprintf(response,"No file with that name found");
+                free(cwd);
             }
             else if (!strcmp(p, HELP))
             {
                 sprintf(response, "Write with lower-case letters!");
             } else if (!strcmp(p, QUIT))
             {
+                int should_kill = 0;
                 response_length = EXIT_STATUS;
-                write(socket_pair[0], &response_length, 4);
+                if (write(socket_pair[0], &response_length, 4) < 4) {
+                    printf("[child] Error at writing response length : %s\n",strerror(errno));
+                    should_kill = 1;
+                }
                 close(socket_pair[0]);
                 close(internal_pipe[0]);
                 close(internal_pipe[1]);
+                if (access(FIFO_NAME, F_OK) != -1 && remove(FIFO_NAME) == -1) {
+                    printf("Error at removing the FIFO from the filesystem : %s\n", strerror(errno));
+                }
+                if (should_kill)
+                    kill(getppid(),9);
                 exit(0);
             } else
             {
@@ -168,11 +279,31 @@ void start_handling_commands() {
 
             out:
             response_length = strlen(response) + 1;
-            write(socket_pair[0], &response_length, 4);
+            if (write(socket_pair[0], &response_length, 4) < 4 )
+            {
+                printf("[child] Error at writing the response length : %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(getppid(),9);
+                exit(4);
+            }
 
-            mkfifo(FIFO_NAME, 0666);
+            if (access(FIFO_NAME, F_OK) == -1 && mkfifo(FIFO_NAME, 0666) == -1)
+            {
+                printf("[child] Error at creating FIFO in the filesystem: %s\n",strerror(errno));
+                close(socket_pair[0]); close(socket_pair[1]); close(internal_pipe[0]); close(internal_pipe[1]);
+                kill(getppid(),9);
+                exit(4);
+            }
             pipe_fd = open(FIFO_NAME, O_WRONLY);
-            write(pipe_fd, response, response_length);
+            if (pipe_fd == -1) {
+                printf("[child] Error at opening FIFO: %s\n",strerror(errno));
+            }
+
+            if (write(pipe_fd, response, response_length) < response_length)
+            {
+                printf("[child] Error at writing the response : %s",strerror(errno));
+                kill(getppid(),9);
+            }
         }
     }
 }

@@ -30,7 +30,7 @@ void print_file_info(const char *path, const struct stat file_stats, char *buffe
     char row[MAX_COL];
     sprintf(row,"Information about %s :\n",path);
     strcat(buffer,row);
-    sprintf(row, "Size of the file (bytes): %d\n",file_stats.st_size);
+    sprintf(row, "Size of the file (bytes): %ld\n",file_stats.st_size);
     strcat(buffer,row);
     sprintf(row, "Last access time: %s",ctime(&(file_stats.st_atime)));
     strcat(buffer,row);
@@ -71,7 +71,7 @@ int is_dir(const char* path)
 
 void find_file(const char* dir_path, const char* filename, char* buffer)
 {
-    struct DIR* dir;
+    DIR* dir;
     dir = opendir(dir_path);
     if (dir == NULL) return;
     struct dirent *entry;
