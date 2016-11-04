@@ -9,7 +9,8 @@
 int check_for_user(const char* name)
 {
     char user_name[100];
-    FILE* user_file = fopen(USERS_FILE,"r");
+    int fd = open(USERS_FILE,O_RDONLY | O_CREAT);
+    FILE* user_file = fdopen(fd,"r");
     while (!feof(user_file))
     {
         fscanf(user_file,"%s",user_name);

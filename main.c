@@ -241,7 +241,13 @@ void start_handling_commands() {
             }
             else if (!strcmp(p, HELP))
             {
-                sprintf(response, "Write with lower-case letters!");
+                sprintf(response, "Available commands: \n login <name> \t\t\t command used to"
+                        " login with an existing username \n mystat <filepath> \t\t displays "
+                        "basic info about the file at filepath\n myfind [directory] <filename>\t"
+                        "searches for the file in the directory structure starting at the specified "
+                        "directory (defaults to the current working directory)\n"
+                        " quit \t\t\t\t command used to exit the program"
+                        "\n NOTES: [] means optional argument, <> means mandatory argument");
             } else if (!strcmp(p, QUIT))
             {
                 int should_kill = 0;
